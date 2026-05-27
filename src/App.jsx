@@ -106,6 +106,7 @@ const getDueInfo = (dueDay) => {
 
 function App() {
   const [view, setView] = useState('dashboard')
+  const [historyTab, setHistoryTab] = useState('monthly')
   const receiptInputRef = useRef(null)
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') {
@@ -527,6 +528,7 @@ function App() {
                 <path d="M8 12.5h5.2a2 2 0 0 1 0 4H8Z" />
               </svg>
             </div>
+            <span className="brand-text">Simple Bill Tracker</span>
           </div>
 
           <div className="toolbar">
@@ -711,65 +713,100 @@ function App() {
                 <span>{historyEntries.length} entries</span>
               </div>
 
-              <div className="history-table">
-                <div className="history-table-head">
-                  <div>Month</div>
-                  <div>Monthly bills</div>
-                  <div>Pag-Ibig contributions</div>
-                </div>
-
-                {historyByMonth.map((month) => (
-                  <div className="history-table-row" key={month.monthLabel}>
-                    <div className="history-month-label">{month.monthLabel}</div>
-
-                    <div className="history-cell history-grid history-grid-monthly">
-                      {month.monthlyBills.length ? (
-                        month.monthlyBills.map((entry) => (
-                          <button
-                            type="button"
-                            key={entry.id}
-                            className="history-view-button history-bill-button"
-                            onClick={() =>
-                              setReceiptPreview({
-                                title: entry.title,
-                                receiptDataUrl: entry.receiptDataUrl,
-                                receiptName: entry.receiptName,
-                              })
-                            }
-                          >
-                            {getHistoryButtonLabel(entry.title)}
-                          </button>
-                        ))
-                      ) : (
-                        <span className="history-empty">—</span>
-                      )}
-                    </div>
-
-                    <div className="history-cell history-grid history-grid-pagibig">
-                      {month.pagibigContributions.length ? (
-                        month.pagibigContributions.map((entry) => (
-                          <button
-                            type="button"
-                            key={entry.id}
-                            className="history-view-button history-bill-button"
-                            onClick={() =>
-                              setReceiptPreview({
-                                title: entry.title,
-                                receiptDataUrl: entry.receiptDataUrl,
-                                receiptName: entry.receiptName,
-                              })
-                            }
-                          >
-                            {getHistoryButtonLabel(entry.title)}
-                          </button>
-                        ))
-                      ) : (
-                        <span className="history-empty">—</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="history-tabs" role="tablist" aria-label="History categories">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={historyTab === 'monthly'}
+                  className={`history-tab ${historyTab === 'monthly' ? 'is-active' : ''}`}
+                  onClick={() => setHistoryTab('monthly')}
+                >
+                  Monthly
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={historyTab === 'pagibig'}
+                  className={`history-tab ${historyTab === 'pagibig' ? 'is-active' : ''}`}
+                  onClick={() => setHistoryTab('pagibig')}
+                >
+                  Pag-Ibig
+                </button>
               </div>
+
+              {historyTab === 'monthly' ? (
+                <div className="history-table">
+                  <div className="history-table-head history-table-head-single">
+                    <div>Month</div>
+                    <div>Monthly bills</div>
+                  </div>
+
+                  {historyByMonth.map((month) => (
+                    <div className="history-table-row history-table-row-single" key={month.monthLabel}>
+                      <div className="history-month-label">{month.monthLabel}</div>
+
+                      <div className="history-cell history-grid history-grid-monthly">
+                        {month.monthlyBills.length ? (
+                          month.monthlyBills.map((entry) => (
+                            <button
+                              type="button"
+                              key={entry.id}
+                              className="history-view-button history-bill-button"
+                              onClick={() =>
+                                setReceiptPreview({
+                                  title: entry.title,
+                                  receiptDataUrl: entry.receiptDataUrl,
+                                  receiptName: entry.receiptName,
+                                })
+                              }
+                            >
+                              {getHistoryButtonLabel(entry.title)}
+                            </button>
+                          ))
+                        ) : (
+                          <span className="history-empty">—</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="history-table">
+                  <div className="history-table-head history-table-head-single">
+                    <div>Month</div>
+                    <div>Pag-Ibig contributions</div>
+                  </div>
+
+                  {historyByMonth.map((month) => (
+                    <div className="history-table-row history-table-row-single" key={month.monthLabel}>
+                      <div className="history-month-label">{month.monthLabel}</div>
+
+                      <div className="history-cell history-grid history-grid-pagibig">
+                        {month.pagibigContributions.length ? (
+                          month.pagibigContributions.map((entry) => (
+                            <button
+                              type="button"
+                              key={entry.id}
+                              className="history-view-button history-bill-button"
+                              onClick={() =>
+                                setReceiptPreview({
+                                  title: entry.title,
+                                  receiptDataUrl: entry.receiptDataUrl,
+                                  receiptName: entry.receiptName,
+                                })
+                              }
+                            >
+                              {getHistoryButtonLabel(entry.title)}
+                            </button>
+                          ))
+                        ) : (
+                          <span className="history-empty">—</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           </main>
         )}
