@@ -260,6 +260,35 @@
   font-size: 13px;
 }
 
+.receipt-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.receipt-close-button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  min-width: 76px;
+  flex: 0 0 auto;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.receipt-close-button:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-border);
+}
+
 .history-view-button {
   width: fit-content;
   padding-inline: 14px;
@@ -643,6 +672,18 @@
   .history-tab {
     flex: 1;
   }
+
+  .receipt-modal-head {
+    gap: 8px;
+  }
+
+  .receipt-close-button {
+    padding: 4px 8px;
+    font-size: 11px;
+    min-width: 58px;
+    border-radius: 10px;
+    width: auto;
+  }
 }
 
 .modal-overlay {
@@ -683,6 +724,10 @@
 
 .modal h3 {
   margin: 0 0 8px;
+}
+
+.receipt-modal-head h2 {
+  margin: 0;
 }
 
 .modal p {

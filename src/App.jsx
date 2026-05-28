@@ -4,8 +4,8 @@ import { loadAppSnapshot, saveAppSnapshot, getDatabaseInfo } from './lib/billSto
 
 const recurringDefault = [
   { id: 'globe-home', name: 'Globe at Home', dueDay: '5th', paid: false, paidDate: '' },
-  { id: 'primewater', name: 'Primewater', dueDay: '15th', paid: false, paidDate: '' },
-  { id: 'hoa-dues', name: 'HOA dues', dueDay: '15th', paid: false, paidDate: '' },
+  { id: 'primewater', name: 'Primewater', dueDay: '17th', paid: false, paidDate: '' },
+  { id: 'hoa-dues', name: 'HOA dues', dueDay: '17th', paid: false, paidDate: '' },
 ]
 
 const savingsDefault = [
@@ -133,15 +133,50 @@ const normalizeSavingsBill = (bill) => {
 
 const normalizeSavingsBills = (bills) => bills.map((bill) => normalizeSavingsBill(bill) ?? bill)
 
+const resetRecurringBillsForNewMonth = (bills) =>
+  bills.map((bill) => ({
+    ...bill,
+    paid: false,
+    paidDate: '',
+    receiptDataUrl: '',
+    receiptName: '',
+  }))
+
+const getInitialAppState = () => ({
+  theme: 'light',
+  recurringBills: recurringDefault,
+  savingsBills: savingsDefault,
+  paymentHistory: [],
+  billingCycleMonthKey: getMonthKey(),
+})
+
+const THEME_STORAGE_KEY = 'bill-tracker-theme'
+
 function App() {
   const [view, setView] = useState('dashboard')
   const [historyTab, setHistoryTab] = useState('monthly')
   const receiptInputRef = useRef(null)
+  const receiptCameraInputRef = useRef(null)
   const [theme, setTheme] = useState('light')
   const [recurringBills, setRecurringBills] = useState(recurringDefault)
   const [savingsBills, setSavingsBills] = useState(savingsDefault)
   const [paymentHistory, setPaymentHistory] = useState([])
+  const [billingCycleMonthKey, setBillingCycleMonthKey] = useState(getMonthKey())
   const [isHydrated, setIsHydrated] = useState(false)
+
+  const persistAppState = (nextState) => {
+    void saveAppSnapshot({
+      theme: nextState.theme,
+      recurringBills: nextState.recurringBills,
+      savingsBills: nextState.savingsBills,
+      paymentHistory: nextState.paymentHistory,
+      billingCycleMonthKey: nextState.billingCycleMonthKey,
+    })
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, nextState.theme)
+    }
+  }
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -152,19 +187,29 @@ function App() {
 
     const hydrate = async () => {
       try {
-        const snapshot = await loadAppSnapshot({
-          theme: 'light',
-          recurringBills: recurringDefault,
-          savingsBills: savingsDefault,
-          paymentHistory: [],
-        })
+        const snapshot = await loadAppSnapshot(getInitialAppState())
 
         if (cancelled) {
           return
         }
 
-        setTheme(snapshot.theme ?? 'light')
-        setRecurringBills(snapshot.recurringBills ?? recurringDefault)
+        const storedTheme = typeof window !== 'undefined' && window.localStorage
+          ? window.localStorage.getItem(THEME_STORAGE_KEY)
+          : null
+
+        const nextTheme = storedTheme ?? snapshot.theme ?? 'light'
+
+        setTheme(nextTheme)
+        const savedBillingCycleMonthKey = snapshot.billingCycleMonthKey ?? getMonthKey()
+        const currentMonthKey = getMonthKey()
+        const shouldResetRecurringBills = savedBillingCycleMonthKey !== currentMonthKey
+
+        setBillingCycleMonthKey(currentMonthKey)
+        setRecurringBills(
+          shouldResetRecurringBills
+            ? resetRecurringBillsForNewMonth(snapshot.recurringBills ?? recurringDefault)
+            : snapshot.recurringBills ?? recurringDefault,
+        )
         setSavingsBills(normalizeSavingsBills(snapshot.savingsBills ?? savingsDefault))
         setPaymentHistory(dedupeHistoryEntries(snapshot.paymentHistory ?? []))
       } finally {
@@ -186,13 +231,75 @@ function App() {
       return
     }
 
-    void saveAppSnapshot({
+    persistAppState({
       theme,
       recurringBills,
       savingsBills,
       paymentHistory,
+      billingCycleMonthKey,
     })
-  }, [isHydrated, paymentHistory, recurringBills, savingsBills, theme])
+  }, [billingCycleMonthKey, isHydrated, paymentHistory, recurringBills, savingsBills, theme])
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return
+    }
+
+    const flushSnapshot = () => {
+      persistAppState({
+        theme,
+        recurringBills,
+        savingsBills,
+        paymentHistory,
+        billingCycleMonthKey,
+      })
+    }
+
+    window.addEventListener('pagehide', flushSnapshot)
+    window.addEventListener('beforeunload', flushSnapshot)
+
+    return () => {
+      window.removeEventListener('pagehide', flushSnapshot)
+      window.removeEventListener('beforeunload', flushSnapshot)
+    }
+  }, [billingCycleMonthKey, isHydrated, paymentHistory, recurringBills, savingsBills, theme])
+
+  const handleThemeToggle = () => {
+    const nextTheme = isDark ? 'light' : 'dark'
+
+    setTheme(nextTheme)
+    persistAppState({
+      theme: nextTheme,
+      recurringBills,
+      savingsBills,
+      paymentHistory,
+      billingCycleMonthKey,
+    })
+  }
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return
+    }
+
+    const checkBillingCycle = () => {
+      const currentMonthKey = getMonthKey()
+
+      setBillingCycleMonthKey((savedMonthKey) => {
+        if (savedMonthKey === currentMonthKey) {
+          return savedMonthKey
+        }
+
+        setRecurringBills((currentBills) => resetRecurringBillsForNewMonth(currentBills))
+        return currentMonthKey
+      })
+    }
+
+    checkBillingCycle()
+    const intervalId = window.setInterval(checkBillingCycle, 60 * 1000)
+
+    return () => window.clearInterval(intervalId)
+  }, [isHydrated])
 
   const isDark = theme === 'dark'
   const currentDateLabel = new Intl.DateTimeFormat('en-PH', {
@@ -213,7 +320,7 @@ function App() {
     setPaymentHistory((currentHistory) => {
       const nextHistory = currentHistory.filter((item) => item.uniqueKey !== entry.uniqueKey)
 
-      return [
+      const nextHistoryState = [
         {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           uniqueKey: entry.uniqueKey,
@@ -224,6 +331,16 @@ function App() {
         },
         ...nextHistory,
       ]
+
+      persistAppState({
+        theme,
+        recurringBills,
+        savingsBills,
+        paymentHistory: nextHistoryState,
+        billingCycleMonthKey,
+      })
+
+      return nextHistoryState
     })
   }
 
@@ -233,8 +350,17 @@ function App() {
     )
   }
 
-  const openReceiptPicker = (section, id) => {
+  const openReceiptPicker = (section, id, mode = 'gallery') => {
     setPendingReceiptTarget({ section, id })
+
+    if (mode === 'camera') {
+      if (receiptCameraInputRef.current) {
+        receiptCameraInputRef.current.value = ''
+        receiptCameraInputRef.current.click()
+      }
+      return
+    }
+
     if (receiptInputRef.current) {
       receiptInputRef.current.value = ''
       receiptInputRef.current.click()
@@ -250,19 +376,35 @@ function App() {
     }
 
     if (section === 'recurring') {
-      setRecurringBills((currentBills) =>
-        currentBills.map((bill) => (bill.id === id ? { ...bill, ...updatedReceipt } : bill)),
+      const nextRecurringBills = recurringBills.map((bill) =>
+        bill.id === id ? { ...bill, ...updatedReceipt } : bill,
       )
+      setRecurringBills(nextRecurringBills)
+      persistAppState({
+        theme,
+        recurringBills: nextRecurringBills,
+        savingsBills,
+        paymentHistory,
+        billingCycleMonthKey,
+      })
 
-      return recurringBills.find((bill) => bill.id === id)
+      return nextRecurringBills.find((bill) => bill.id === id)
     }
 
     if (section === 'savings') {
-      setSavingsBills((currentBills) =>
-        currentBills.map((bill) => (bill.id === id ? { ...bill, ...updatedReceipt } : bill)),
+      const nextSavingsBills = savingsBills.map((bill) =>
+        bill.id === id ? { ...bill, ...updatedReceipt } : bill,
       )
+      setSavingsBills(nextSavingsBills)
+      persistAppState({
+        theme,
+        recurringBills,
+        savingsBills: nextSavingsBills,
+        paymentHistory,
+        billingCycleMonthKey,
+      })
 
-      return savingsBills.find((bill) => bill.id === id)
+      return nextSavingsBills.find((bill) => bill.id === id)
     }
 
     return null
@@ -272,23 +414,35 @@ function App() {
     const uniqueKey = `${id}-${getMonthKey()}`
 
     if (section === 'recurring') {
-      setRecurringBills((currentBills) =>
-        currentBills.map((bill) =>
-          bill.id === id
-            ? { ...bill, paid: false, paidDate: '', receiptDataUrl: '', receiptName: '' }
-            : bill,
-        ),
+      const nextRecurringBills = recurringBills.map((bill) =>
+        bill.id === id
+          ? { ...bill, paid: false, paidDate: '', receiptDataUrl: '', receiptName: '' }
+          : bill,
       )
+      setRecurringBills(nextRecurringBills)
+      persistAppState({
+        theme,
+        recurringBills: nextRecurringBills,
+        savingsBills,
+        paymentHistory,
+        billingCycleMonthKey,
+      })
     }
 
     if (section === 'savings') {
-      setSavingsBills((currentBills) =>
-        currentBills.map((bill) =>
-          bill.id === id
-            ? { ...bill, paid: false, paidDate: '', receiptDataUrl: '', receiptName: '' }
-            : bill,
-        ),
+      const nextSavingsBills = savingsBills.map((bill) =>
+        bill.id === id
+          ? { ...bill, paid: false, paidDate: '', receiptDataUrl: '', receiptName: '' }
+          : bill,
       )
+      setSavingsBills(nextSavingsBills)
+      persistAppState({
+        theme,
+        recurringBills,
+        savingsBills: nextSavingsBills,
+        paymentHistory,
+        billingCycleMonthKey,
+      })
     }
 
     removeHistory(uniqueKey)
@@ -340,18 +494,24 @@ function App() {
 
     const uniqueKey = `${bill.id}-${getMonthKey()}`
     const willBePaid = !bill.paid
-
-    setRecurringBills((currentBills) =>
-      currentBills.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              paid: willBePaid,
-              paidDate: willBePaid ? formatPaidDate() : '',
-            }
-          : item,
-      ),
+    const nextRecurringBills = recurringBills.map((item) =>
+      item.id === id
+        ? {
+            ...item,
+            paid: willBePaid,
+            paidDate: willBePaid ? formatPaidDate() : '',
+          }
+        : item,
     )
+
+    setRecurringBills(nextRecurringBills)
+    persistAppState({
+      theme,
+      recurringBills: nextRecurringBills,
+      savingsBills,
+      paymentHistory,
+      billingCycleMonthKey,
+    })
 
     if (!willBePaid) {
       clearBillReceipt('recurring', bill.id)
@@ -364,18 +524,24 @@ function App() {
 
     const uniqueKey = `${bill.id}-${getMonthKey()}`
     const willBePaid = !bill.paid
-
-    setSavingsBills((currentBills) =>
-      currentBills.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              paid: willBePaid,
-              paidDate: willBePaid ? formatPaidDate() : '',
-            }
-          : item,
-      ),
+    const nextSavingsBills = savingsBills.map((item) =>
+      item.id === id
+        ? {
+            ...item,
+            paid: willBePaid,
+            paidDate: willBePaid ? formatPaidDate() : '',
+          }
+        : item,
     )
+
+    setSavingsBills(nextSavingsBills)
+    persistAppState({
+      theme,
+      recurringBills,
+      savingsBills: nextSavingsBills,
+      paymentHistory,
+      billingCycleMonthKey,
+    })
 
     if (!willBePaid) {
       clearBillReceipt('savings', bill.id)
@@ -383,9 +549,15 @@ function App() {
   }
 
   const updateSavingsAmount = (id, value) => {
-    setSavingsBills((currentBills) =>
-      currentBills.map((bill) => (bill.id === id ? { ...bill, amount: value } : bill)),
-    )
+    const nextSavingsBills = savingsBills.map((bill) => (bill.id === id ? { ...bill, amount: value } : bill))
+    setSavingsBills(nextSavingsBills)
+    persistAppState({
+      theme,
+      recurringBills,
+      savingsBills: nextSavingsBills,
+      paymentHistory,
+      billingCycleMonthKey,
+    })
   }
 
   const prepayMP1 = (months = mp1PrepayMonths) => {
@@ -394,22 +566,29 @@ function App() {
     const expiry = new Date()
     expiry.setMonth(expiry.getMonth() + months)
 
-    setSavingsBills((currentBills) =>
-      currentBills.map((bill) =>
-        bill.id === 'pagibig-mp1'
-          ? {
-              ...bill,
-              paid: true,
-              paidDate: formatPaidDate(),
-              prepaid: true,
-              prepaidMonths: months,
-              prepaidUntil: `+${months} mo`,
-              prepaidExpiry: expiry.toISOString(),
-              amount: String(total),
-            }
-          : bill,
-      ),
+    const nextSavingsBills = savingsBills.map((bill) =>
+      bill.id === 'pagibig-mp1'
+        ? {
+            ...bill,
+            paid: true,
+            paidDate: formatPaidDate(),
+            prepaid: true,
+            prepaidMonths: months,
+            prepaidUntil: `+${months} mo`,
+            prepaidExpiry: expiry.toISOString(),
+            amount: String(total),
+          }
+        : bill,
     )
+
+    setSavingsBills(nextSavingsBills)
+    persistAppState({
+      theme,
+      recurringBills,
+      savingsBills: nextSavingsBills,
+      paymentHistory,
+      billingCycleMonthKey,
+    })
 
     upsertHistory({
       uniqueKey: `pagibig-mp1-${getMonthKey()}`,
@@ -521,11 +700,11 @@ function App() {
         <header className="topbar">
           <div className="brand" aria-label="Bills">
             <div className="brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <rect x="6" y="5" width="13" height="13" rx="3" opacity="0.35" />
-                <rect x="4" y="3" width="13" height="13" rx="3" />
-                <path d="M7 7.5h7.5M7 10.5h5.5" />
-                <path d="M14.2 7.1a1.7 1.7 0 1 1 0 3.4" />
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3.5" y="4" width="17" height="16" rx="4" />
+                <path d="M7 8h9M7 11h7M7 14h5" />
+                <circle cx="16.5" cy="13" r="2.25" />
+                <path d="M16.5 11.8v2.4M15.45 12.55h2.1" />
               </svg>
             </div>
           </div>
@@ -553,7 +732,7 @@ function App() {
             <button
               type="button"
               className="theme-toggle"
-              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              onClick={handleThemeToggle}
               aria-label={`Switch to ${isDark ? 'light' : 'dark'} theme`}
             >
               {isDark ? (
@@ -665,13 +844,22 @@ function App() {
                           </button>
                         </>
                       ) : (
-                        <button
-                          type="button"
-                          className="status-toggle"
-                          onClick={() => openReceiptPicker('recurring', bill.id)}
-                        >
-                          Upload receipt
-                        </button>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            type="button"
+                            className="nav-pill"
+                            onClick={() => openReceiptPicker('recurring', bill.id, 'camera')}
+                          >
+                            Camera
+                          </button>
+                          <button
+                            type="button"
+                            className="status-toggle"
+                            onClick={() => openReceiptPicker('recurring', bill.id, 'gallery')}
+                          >
+                            Gallery
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -733,13 +921,22 @@ function App() {
                           </button>
                         </>
                       ) : (
-                        <button
-                          type="button"
-                          className="status-toggle"
-                          onClick={() => openReceiptPicker('savings', bill.id)}
-                        >
-                          Upload receipt
-                        </button>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            type="button"
+                            className="nav-pill"
+                            onClick={() => openReceiptPicker('savings', bill.id, 'camera')}
+                          >
+                            Camera
+                          </button>
+                          <button
+                            type="button"
+                            className="status-toggle"
+                            onClick={() => openReceiptPicker('savings', bill.id, 'gallery')}
+                          >
+                            Gallery
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -865,6 +1062,13 @@ function App() {
         ref={receiptInputRef}
         type="file"
         accept="image/*"
+        hidden
+        onChange={handleReceiptUpload}
+      />
+      <input
+        ref={receiptCameraInputRef}
+        type="file"
+        accept="image/*"
         capture="environment"
         hidden
         onChange={handleReceiptUpload}
@@ -873,11 +1077,11 @@ function App() {
       {receiptPreview ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal receipt-modal">
-            <div className="section-head">
+            <div className="receipt-modal-head">
               <h2>{receiptPreview.title}</h2>
               <button
                 type="button"
-                className="undo-toggle"
+                className="receipt-close-button"
                 onClick={() => setReceiptPreview(null)}
               >
                 Close
