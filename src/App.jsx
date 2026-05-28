@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
+import { loadAppSnapshot, saveAppSnapshot, getDatabaseInfo } from './lib/billStore'
 
 const recurringDefault = [
   { id: 'globe-home', name: 'Globe at Home', dueDay: '5th', paid: false, paidDate: '' },
@@ -104,96 +105,94 @@ const getDueInfo = (dueDay) => {
   return { label: `${diffDays} day(s) left`, tone: 'blue' }
 }
 
+const normalizeSavingsBill = (bill) => {
+  if (!bill || typeof bill !== 'object') {
+    return null
+  }
+
+  if (!bill.prepaidExpiry) {
+    return bill
+  }
+
+  const expiry = new Date(bill.prepaidExpiry).getTime()
+
+  if (Number.isNaN(expiry) || expiry > Date.now()) {
+    return bill
+  }
+
+  return {
+    ...bill,
+    prepaid: false,
+    paid: false,
+    paidDate: '',
+    prepaidExpiry: undefined,
+    prepaidMonths: 0,
+    prepaidUntil: '',
+  }
+}
+
+const normalizeSavingsBills = (bills) => bills.map((bill) => normalizeSavingsBill(bill) ?? bill)
+
 function App() {
   const [view, setView] = useState('dashboard')
   const [historyTab, setHistoryTab] = useState('monthly')
   const receiptInputRef = useRef(null)
-  const [theme, setTheme] = useState(() => {
-    if (typeof window === 'undefined') {
-      return 'light'
-    }
-
-    return window.localStorage.getItem('bill-tracker-theme') ?? 'light'
-  })
-
-  const [recurringBills, setRecurringBills] = useState(() => {
-    if (typeof window === 'undefined') {
-      return recurringDefault
-    }
-
-    const storedBills = window.localStorage.getItem('bill-tracker-recurring')
-
-    return storedBills ? JSON.parse(storedBills) : recurringDefault
-  })
-
-  const [savingsBills, setSavingsBills] = useState(() => {
-    if (typeof window === 'undefined') {
-      return savingsDefault
-    }
-
-    const storedBills = window.localStorage.getItem('bill-tracker-savings')
-
-    if (!storedBills) return savingsDefault
-
-    try {
-      const parsed = JSON.parse(storedBills)
-      const now = Date.now()
-      return parsed.map((b) => {
-        if (b.prepaidExpiry) {
-          const expiry = new Date(b.prepaidExpiry).getTime()
-          if (expiry <= now) {
-            // expired -> clear prepaid state
-            return {
-              ...b,
-              prepaid: false,
-              paid: false,
-              paidDate: '',
-              prepaidExpiry: undefined,
-              prepaidMonths: 0,
-              prepaidUntil: '',
-            }
-          }
-        }
-
-        return b
-      })
-    } catch (e) {
-      return savingsDefault
-    }
-  })
-
-  const [paymentHistory, setPaymentHistory] = useState(() => {
-    if (typeof window === 'undefined') {
-      return []
-    }
-
-    const storedHistory = window.localStorage.getItem('bill-tracker-history')
-
-    if (!storedHistory) return []
-
-    try {
-      return dedupeHistoryEntries(JSON.parse(storedHistory))
-    } catch (error) {
-      return []
-    }
-  })
+  const [theme, setTheme] = useState('light')
+  const [recurringBills, setRecurringBills] = useState(recurringDefault)
+  const [savingsBills, setSavingsBills] = useState(savingsDefault)
+  const [paymentHistory, setPaymentHistory] = useState([])
+  const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    window.localStorage.setItem('bill-tracker-theme', theme)
   }, [theme])
 
   useEffect(() => {
-    window.localStorage.setItem('bill-tracker-recurring', JSON.stringify(recurringBills))
-  }, [recurringBills])
+    let cancelled = false
+
+    const hydrate = async () => {
+      try {
+        const snapshot = await loadAppSnapshot({
+          theme: 'light',
+          recurringBills: recurringDefault,
+          savingsBills: savingsDefault,
+          paymentHistory: [],
+        })
+
+        if (cancelled) {
+          return
+        }
+
+        setTheme(snapshot.theme ?? 'light')
+        setRecurringBills(snapshot.recurringBills ?? recurringDefault)
+        setSavingsBills(normalizeSavingsBills(snapshot.savingsBills ?? savingsDefault))
+        setPaymentHistory(dedupeHistoryEntries(snapshot.paymentHistory ?? []))
+      } finally {
+        if (!cancelled) {
+          setIsHydrated(true)
+        }
+      }
+    }
+
+    void hydrate()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
-    window.localStorage.setItem('bill-tracker-savings', JSON.stringify(savingsBills))
-  }, [savingsBills])
+    if (!isHydrated) {
+      return
+    }
 
-  useEffect(() => {
-    window.localStorage.setItem('bill-tracker-history', JSON.stringify(paymentHistory))
-  }, [paymentHistory])
+    void saveAppSnapshot({
+      theme,
+      recurringBills,
+      savingsBills,
+      paymentHistory,
+    })
+  }, [isHydrated, paymentHistory, recurringBills, savingsBills, theme])
 
   const isDark = theme === 'dark'
   const currentDateLabel = new Intl.DateTimeFormat('en-PH', {
@@ -567,6 +566,25 @@ function App() {
                 </svg>
               )}
             </button>
+            <button
+              type="button"
+              className="nav-pill"
+              onClick={async () => {
+                try {
+                  const info = await getDatabaseInfo()
+                  const body = info.platform === 'native'
+                    ? `Path: ${info.url}\nTables: ${info.tables.join(', ')}`
+                    : `Web (IndexedDB blob)\nTables: ${info.tables.join(', ')}`
+
+                  // quick debug display
+                  window.alert(body)
+                } catch (err) {
+                  window.alert(String(err))
+                }
+              }}
+            >
+              DB info
+            </button>
           </div>
         </header>
 
@@ -816,6 +834,7 @@ function App() {
         ref={receiptInputRef}
         type="file"
         accept="image/*"
+        capture="environment"
         hidden
         onChange={handleReceiptUpload}
       />

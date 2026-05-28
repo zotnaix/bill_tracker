@@ -14,3 +14,9 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## Storage
+
+Bill data now persists in a local SQLite database via `sql.js`, which keeps receipts, history, and settings in one place and makes the app easier to package for mobile later.
+
+On phones, the receipt picker also opens the camera/gallery for image uploads, so you can attach receipts directly from mobile.
