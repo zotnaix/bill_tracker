@@ -566,25 +566,56 @@ function App() {
                 </svg>
               )}
             </button>
-            <button
-              type="button"
-              className="nav-pill"
-              onClick={async () => {
-                try {
-                  const info = await getDatabaseInfo()
-                  const body = info.platform === 'native'
-                    ? `Path: ${info.url}\nTables: ${info.tables.join(', ')}`
-                    : `Web (IndexedDB blob)\nTables: ${info.tables.join(', ')}`
+            {/* Debug DB buttons removed for production; keep store APIs available for tests */}
+            {import.meta.env.DEV ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 12 }}>
+                <button
+                  type="button"
+                  className="nav-pill"
+                  onClick={async () => {
+                    try {
+                      const m = await import('./lib/billStore')
+                      const blob = await m.exportDatabaseFile()
 
-                  // quick debug display
-                  window.alert(body)
-                } catch (err) {
-                  window.alert(String(err))
-                }
-              }}
-            >
-              DB info
-            </button>
+                      if (!blob) {
+                        window.alert('Native DB export not available from the web UI. Use Device File Explorer or adb to pull the DB.')
+                        return
+                      }
+
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = 'bill-tracker.sqlite'
+                      document.body.appendChild(a)
+                      a.click()
+                      a.remove()
+                      URL.revokeObjectURL(url)
+                    } catch (err) {
+                      window.alert(String(err))
+                    }
+                  }}
+                >
+                  Export DB
+                </button>
+
+                <button
+                  type="button"
+                  className="nav-pill"
+                  onClick={async () => {
+                    if (!window.confirm('Clear the app database and reset to a clean slate? This cannot be undone.')) return
+
+                    try {
+                      await import('./lib/billStore').then(m => m.clearAppDatabase())
+                      window.location.reload()
+                    } catch (err) {
+                      window.alert(String(err))
+                    }
+                  }}
+                >
+                  Clear DB (dev)
+                </button>
+              </div>
+            ) : null}
           </div>
         </header>
 

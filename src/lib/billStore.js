@@ -381,3 +381,68 @@ export const getDatabaseInfo = async () => {
 
   return { platform: 'web', tables }
 }
+
+const deleteStoredDatabase = async () => {
+  const db = await openIndexedDb()
+
+  if (!db) return
+
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('files', 'readwrite')
+    const store = tx.objectStore('files')
+    const req = store.delete(DB_STORAGE_KEY)
+
+    req.onsuccess = () => resolve()
+    req.onerror = () => reject(req.error)
+  })
+}
+
+export const clearAppDatabase = async () => {
+  // remove legacy localStorage keys
+  clearLegacySnapshot()
+
+  if (isNativePlatform()) {
+    const connection = await ensureNativeDatabase()
+
+    try {
+      await connection.close()
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      // try deleting via connection helper
+      if (typeof connection.delete === 'function') {
+        await connection.delete()
+      } else {
+        const sqlite = await ensureNativeBridge()
+        if (typeof sqlite.deleteDatabase === 'function') {
+          await sqlite.deleteDatabase(DB_NAME)
+        }
+      }
+    } catch (e) {
+      // ignore deletion errors
+    }
+
+    // reset cached natives so next access recreates
+    nativeDatabasePromise = null
+    nativeBridgePromise = null
+
+    return
+  }
+
+  // web fallback: remove stored blob and reset in-memory DB
+  await deleteStoredDatabase()
+  browserDatabasePromise = null
+}
+
+export const exportDatabaseFile = async () => {
+  if (isNativePlatform()) {
+    // Native DB export is device-specific; prefer using getDatabaseInfo() and adb/device explorer
+    return null
+  }
+
+  const database = await ensureBrowserDatabase()
+  const serialized = database.export()
+  return new Blob([serialized], { type: 'application/octet-stream' })
+}
