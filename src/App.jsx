@@ -519,15 +519,15 @@ function App() {
     <>
       <div className="app-shell">
         <header className="topbar">
-          <div className="brand" aria-label="Bill Tracker">
+          <div className="brand" aria-label="Bills">
             <div className="brand-mark" aria-hidden="true">
               <svg viewBox="0 0 24 24">
-                <rect x="4" y="5" width="16" height="14" rx="4" />
-                <path d="M8 8.5h4.2a2 2 0 0 1 0 4H8Z" />
-                <path d="M8 12.5h5.2a2 2 0 0 1 0 4H8Z" />
+                <rect x="6" y="5" width="13" height="13" rx="3" opacity="0.35" />
+                <rect x="4" y="3" width="13" height="13" rx="3" />
+                <path d="M7 7.5h7.5M7 10.5h5.5" />
+                <path d="M14.2 7.1a1.7 1.7 0 1 1 0 3.4" />
               </svg>
             </div>
-            <span className="brand-text">Simple Bill Tracker</span>
           </div>
 
           <div className="toolbar">
@@ -691,15 +691,15 @@ function App() {
                   <div className="bill-row" key={bill.id}>
                     <div className="bill-meta">
                       <strong>{bill.name}</strong>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <label style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                            <div className="bill-amount-row">
+                              <label className="bill-amount-label">
                           Amount:
                         </label>
                         <input
                           aria-label={`${bill.name} amount`}
+                                className="bill-amount-input"
                           value={bill.amount}
                           onChange={(e) => updateSavingsAmount(bill.id, e.target.value)}
-                          style={{ width: 96, padding: '6px 8px', borderRadius: 8 }}
                         />
                       </div>
                       <span className={`due-badge ${isPaid ? 'is-paid' : 'blue'}`}>

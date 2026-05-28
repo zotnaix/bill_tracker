@@ -2,9 +2,9 @@
   min-height: 100svh;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: clamp(14px, 2vw, 22px);
   box-sizing: border-box;
-  gap: 18px;
+  gap: clamp(14px, 2vw, 18px);
 }
 
 .topbar {
@@ -12,12 +12,16 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .date-pill {
@@ -59,6 +63,7 @@
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .brand-text {
@@ -126,11 +131,11 @@
 .content {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 18px;
   align-items: stretch;
   width: 100%;
-  max-width: 1080px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -146,6 +151,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .list-card:nth-of-type(3) {
@@ -216,6 +222,31 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.bill-amount-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bill-amount-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.bill-amount-input {
+  width: min(100%, 110px);
+  min-width: 92px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-h);
 }
 
 .undo-toggle,
@@ -370,10 +401,12 @@
   gap: 16px;
   padding: 16px 0;
   border-top: 1px solid var(--border);
+  flex-wrap: wrap;
 
   .bill-meta {
     display: grid;
     gap: 4px;
+    min-width: 0;
   }
 
   .bill-meta strong {
@@ -505,6 +538,16 @@
     padding: 16px;
   }
 
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .toolbar {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
   .content {
     grid-template-columns: 1fr;
   }
@@ -549,6 +592,27 @@
     padding: 20px;
   }
 
+  .brand-text {
+    font-size: 14px;
+  }
+
+  .date-pill,
+  .nav-pill,
+  .undo-toggle,
+  .history-view-button,
+  .status-toggle {
+    width: 100%;
+  }
+
+  .bill-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .bill-amount-input {
+    width: 100%;
+  }
+
   .stats {
     grid-template-columns: 1fr;
   }
@@ -561,10 +625,6 @@
   .bill-row {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .status-toggle {
-    width: 100%;
   }
 
   .history-month-label {
