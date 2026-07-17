@@ -15,6 +15,12 @@
   flex-wrap: wrap;
 }
 
+.topbar-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -36,7 +42,8 @@
 }
 
 .brand-mark,
-.theme-toggle {
+.theme-toggle,
+.menu-toggle {
   border: 1px solid var(--border);
   background: var(--panel);
   box-shadow: var(--shadow);
@@ -101,6 +108,43 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+}
+
+.menu-toggle {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-direction: column;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.menu-toggle span {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.menu-toggle.is-open span:nth-child(1) {
+  transform: translateY(5px) rotate(45deg);
+}
+
+.menu-toggle.is-open span:nth-child(2) {
+  opacity: 0;
+}
+
+.menu-toggle.is-open span:nth-child(3) {
+  transform: translateY(-5px) rotate(-45deg);
 }
 
 .nav-pill {
@@ -372,8 +416,38 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.history-grid-pagibig {
+.history-grid-billers {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.biller-add-button {
+  width: fit-content;
+}
+
+.biller-modal-fields {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+
+.modal-field {
+  display: grid;
+  gap: 6px;
+}
+
+.modal-field span {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.modal-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-h);
 }
 
 .history-item {
@@ -562,6 +636,13 @@
   border-color: transparent;
 }
 
+.mobile-nav {
+  display: none;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 0 2px;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     padding: 16px;
@@ -599,7 +680,7 @@
   }
 
   .history-grid-monthly,
-  .history-grid-pagibig {
+  .history-grid-billers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -615,6 +696,28 @@
 }
 
 @media (max-width: 560px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topbar-left {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .toolbar {
+    display: none;
+  }
+
+  .menu-toggle {
+    display: inline-flex;
+  }
+
+  .mobile-nav {
+    display: flex;
+  }
+
   .hero-card,
   .list-card {
     border-radius: 22px;
@@ -661,8 +764,12 @@
   }
 
   .history-grid-monthly,
-  .history-grid-pagibig {
+  .history-grid-billers {
     grid-template-columns: 1fr;
+  }
+
+  .biller-add-button {
+    width: 100%;
   }
 
   .history-tabs {
@@ -683,6 +790,10 @@
     min-width: 58px;
     border-radius: 10px;
     width: auto;
+  }
+
+  .date-pill {
+    width: 100%;
   }
 }
 

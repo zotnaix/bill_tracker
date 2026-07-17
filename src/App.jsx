@@ -8,9 +8,9 @@ const recurringDefault = [
   { id: 'hoa-dues', name: 'HOA dues', dueDay: '17th', paid: false, paidDate: '' },
 ]
 
-const savingsDefault = [
-  { id: 'pagibig-mp1', name: 'Pag-ibig MP1', amount: '1,000', paid: false, paidDate: '' },
-  { id: 'pagibig-mp2', name: 'Pag-ibig MP2', amount: '1,000', paid: false, paidDate: '' },
+const billersDefault = [
+  { id: 'sample-biller-1', name: 'Sample biller', dueDay: '10th', paid: false, paidDate: '' },
+  { id: 'sample-biller-2', name: 'Another biller', dueDay: '20th', paid: false, paidDate: '' },
 ]
 
 const monthLabels = [
@@ -39,10 +39,6 @@ const getMonthKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
 const getHistoryButtonLabel = (title) => {
-  if (title.startsWith('Pag-ibig')) {
-    return title.split(' ').at(-1) ?? title
-  }
-
   if (title.includes('Globe')) {
     return 'Globe'
   }
@@ -133,6 +129,12 @@ const normalizeSavingsBill = (bill) => {
 
 const normalizeSavingsBills = (bills) => bills.map((bill) => normalizeSavingsBill(bill) ?? bill)
 
+const normalizeBillers = (billers) =>
+  billers.map((biller) => ({
+    ...biller,
+    dueDay: biller.dueDay ?? '1st',
+  }))
+
 const resetRecurringBillsForNewMonth = (bills) =>
   bills.map((bill) => ({
     ...bill,
@@ -145,7 +147,7 @@ const resetRecurringBillsForNewMonth = (bills) =>
 const getInitialAppState = () => ({
   theme: 'light',
   recurringBills: recurringDefault,
-  savingsBills: savingsDefault,
+  billers: billersDefault,
   paymentHistory: [],
   billingCycleMonthKey: getMonthKey(),
 })
@@ -155,20 +157,26 @@ const THEME_STORAGE_KEY = 'bill-tracker-theme'
 function App() {
   const [view, setView] = useState('dashboard')
   const [historyTab, setHistoryTab] = useState('monthly')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const receiptInputRef = useRef(null)
   const receiptCameraInputRef = useRef(null)
   const [theme, setTheme] = useState('light')
   const [recurringBills, setRecurringBills] = useState(recurringDefault)
-  const [savingsBills, setSavingsBills] = useState(savingsDefault)
+  const [billers, setBillers] = useState(billersDefault)
   const [paymentHistory, setPaymentHistory] = useState([])
   const [billingCycleMonthKey, setBillingCycleMonthKey] = useState(getMonthKey())
   const [isHydrated, setIsHydrated] = useState(false)
+  const [isBillerModalOpen, setIsBillerModalOpen] = useState(false)
+  const [billerEditorMode, setBillerEditorMode] = useState('add')
+  const [editingBillerId, setEditingBillerId] = useState(null)
+  const [billerName, setBillerName] = useState('')
+  const [billerDueDay, setBillerDueDay] = useState('')
 
   const persistAppState = (nextState) => {
     void saveAppSnapshot({
       theme: nextState.theme,
       recurringBills: nextState.recurringBills,
-      savingsBills: nextState.savingsBills,
+      billers: nextState.billers,
       paymentHistory: nextState.paymentHistory,
       billingCycleMonthKey: nextState.billingCycleMonthKey,
     })
@@ -210,7 +218,7 @@ function App() {
             ? resetRecurringBillsForNewMonth(snapshot.recurringBills ?? recurringDefault)
             : snapshot.recurringBills ?? recurringDefault,
         )
-        setSavingsBills(normalizeSavingsBills(snapshot.savingsBills ?? savingsDefault))
+        setBillers(normalizeBillers(snapshot.billers ?? billersDefault))
         setPaymentHistory(dedupeHistoryEntries(snapshot.paymentHistory ?? []))
       } finally {
         if (!cancelled) {
@@ -234,11 +242,11 @@ function App() {
     persistAppState({
       theme,
       recurringBills,
-      savingsBills,
+      billers,
       paymentHistory,
       billingCycleMonthKey,
     })
-  }, [billingCycleMonthKey, isHydrated, paymentHistory, recurringBills, savingsBills, theme])
+  }, [billingCycleMonthKey, billers, isHydrated, paymentHistory, recurringBills, theme])
 
   useEffect(() => {
     if (!isHydrated) {
@@ -249,7 +257,7 @@ function App() {
       persistAppState({
         theme,
         recurringBills,
-        savingsBills,
+        billers,
         paymentHistory,
         billingCycleMonthKey,
       })
@@ -262,7 +270,7 @@ function App() {
       window.removeEventListener('pagehide', flushSnapshot)
       window.removeEventListener('beforeunload', flushSnapshot)
     }
-  }, [billingCycleMonthKey, isHydrated, paymentHistory, recurringBills, savingsBills, theme])
+  }, [billingCycleMonthKey, billers, isHydrated, paymentHistory, recurringBills, theme])
 
   const handleThemeToggle = () => {
     const nextTheme = isDark ? 'light' : 'dark'
@@ -271,10 +279,15 @@ function App() {
     persistAppState({
       theme: nextTheme,
       recurringBills,
-      savingsBills,
+      billers,
       paymentHistory,
       billingCycleMonthKey,
     })
+  }
+
+  const switchView = (nextView) => {
+    setView(nextView)
+    setMobileMenuOpen(false)
   }
 
   useEffect(() => {
@@ -308,9 +321,6 @@ function App() {
     year: 'numeric',
   }).format(new Date())
 
-  const [mp1PrepayMonths, setMp1PrepayMonths] = useState(7) // default Jun->Dec
-  const [showPrepayModal, setShowPrepayModal] = useState(false)
-  const [prepayPreview, setPrepayPreview] = useState({ months: mp1PrepayMonths, total: mp1PrepayMonths * 200 })
   const [pendingReceiptTarget, setPendingReceiptTarget] = useState(null)
   const [receiptPreview, setReceiptPreview] = useState(null)
 
@@ -335,7 +345,7 @@ function App() {
       persistAppState({
         theme,
         recurringBills,
-        savingsBills,
+        billers,
         paymentHistory: nextHistoryState,
         billingCycleMonthKey,
       })
@@ -383,7 +393,7 @@ function App() {
       persistAppState({
         theme,
         recurringBills: nextRecurringBills,
-        savingsBills,
+        billers,
         paymentHistory,
         billingCycleMonthKey,
       })
@@ -391,20 +401,20 @@ function App() {
       return nextRecurringBills.find((bill) => bill.id === id)
     }
 
-    if (section === 'savings') {
-      const nextSavingsBills = savingsBills.map((bill) =>
+    if (section === 'billers') {
+      const nextBillers = billers.map((bill) =>
         bill.id === id ? { ...bill, ...updatedReceipt } : bill,
       )
-      setSavingsBills(nextSavingsBills)
+      setBillers(nextBillers)
       persistAppState({
         theme,
         recurringBills,
-        savingsBills: nextSavingsBills,
+        billers: nextBillers,
         paymentHistory,
         billingCycleMonthKey,
       })
 
-      return nextSavingsBills.find((bill) => bill.id === id)
+      return nextBillers.find((bill) => bill.id === id)
     }
 
     return null
@@ -423,23 +433,23 @@ function App() {
       persistAppState({
         theme,
         recurringBills: nextRecurringBills,
-        savingsBills,
+        billers,
         paymentHistory,
         billingCycleMonthKey,
       })
     }
 
-    if (section === 'savings') {
-      const nextSavingsBills = savingsBills.map((bill) =>
+    if (section === 'billers') {
+      const nextBillers = billers.map((bill) =>
         bill.id === id
           ? { ...bill, paid: false, paidDate: '', receiptDataUrl: '', receiptName: '' }
           : bill,
       )
-      setSavingsBills(nextSavingsBills)
+      setBillers(nextBillers)
       persistAppState({
         theme,
         recurringBills,
-        savingsBills: nextSavingsBills,
+        billers: nextBillers,
         paymentHistory,
         billingCycleMonthKey,
       })
@@ -469,15 +479,10 @@ function App() {
       upsertHistory({
         uniqueKey,
         title: bill.name,
-        type: target.section === 'recurring' ? 'Recurring' : 'Savings',
-        amount: target.section === 'recurring' ? 'N/A' : bill.amount,
+        type: target.section === 'recurring' ? 'Recurring' : 'Biller',
+        amount: 'N/A',
         months: '1 month',
-        note:
-          target.section === 'recurring'
-            ? `Due every ${bill.dueDay}`
-            : bill.id === 'pagibig-mp1'
-              ? 'Monthly contribution'
-              : 'Monthly contribution',
+        note: target.section === 'recurring' ? `Due every ${bill.dueDay}` : `Due every ${bill.dueDay}`,
         receiptDataUrl,
         receiptName: file.name,
       })
@@ -508,7 +513,7 @@ function App() {
     persistAppState({
       theme,
       recurringBills: nextRecurringBills,
-      savingsBills,
+      billers,
       paymentHistory,
       billingCycleMonthKey,
     })
@@ -518,13 +523,13 @@ function App() {
     }
   }
 
-  const toggleSavingsBill = (id) => {
-    const bill = savingsBills.find((item) => item.id === id)
+  const toggleBiller = (id) => {
+    const bill = billers.find((item) => item.id === id)
     if (!bill) return
 
     const uniqueKey = `${bill.id}-${getMonthKey()}`
     const willBePaid = !bill.paid
-    const nextSavingsBills = savingsBills.map((item) =>
+    const nextBillers = billers.map((item) =>
       item.id === id
         ? {
             ...item,
@@ -534,124 +539,102 @@ function App() {
         : item,
     )
 
-    setSavingsBills(nextSavingsBills)
+    setBillers(nextBillers)
     persistAppState({
       theme,
       recurringBills,
-      savingsBills: nextSavingsBills,
+      billers: nextBillers,
       paymentHistory,
       billingCycleMonthKey,
     })
 
     if (!willBePaid) {
-      clearBillReceipt('savings', bill.id)
+      clearBillReceipt('billers', bill.id)
     }
   }
 
-  const updateSavingsAmount = (id, value) => {
-    const nextSavingsBills = savingsBills.map((bill) => (bill.id === id ? { ...bill, amount: value } : bill))
-    setSavingsBills(nextSavingsBills)
-    persistAppState({
-      theme,
-      recurringBills,
-      savingsBills: nextSavingsBills,
-      paymentHistory,
-      billingCycleMonthKey,
-    })
+  const openAddBillerModal = () => {
+    setBillerEditorMode('add')
+    setEditingBillerId(null)
+    setBillerName('')
+    setBillerDueDay('')
+    setIsBillerModalOpen(true)
   }
 
-  const prepayMP1 = (months = mp1PrepayMonths) => {
-    const perMonth = 200
-    const total = months * perMonth
-    const expiry = new Date()
-    expiry.setMonth(expiry.getMonth() + months)
-
-    const nextSavingsBills = savingsBills.map((bill) =>
-      bill.id === 'pagibig-mp1'
-        ? {
-            ...bill,
-            paid: true,
-            paidDate: formatPaidDate(),
-            prepaid: true,
-            prepaidMonths: months,
-            prepaidUntil: `+${months} mo`,
-            prepaidExpiry: expiry.toISOString(),
-            amount: String(total),
-          }
-        : bill,
-    )
-
-    setSavingsBills(nextSavingsBills)
-    persistAppState({
-      theme,
-      recurringBills,
-      savingsBills: nextSavingsBills,
-      paymentHistory,
-      billingCycleMonthKey,
-    })
-
-    upsertHistory({
-      uniqueKey: `pagibig-mp1-${getMonthKey()}`,
-      title: 'Pag-ibig MP1',
-      type: 'Savings',
-      amount: String(total),
-      months: '1 month',
-      note: 'Monthly contribution',
-    })
+  const openEditBillerModal = (bill) => {
+    setBillerEditorMode('edit')
+    setEditingBillerId(bill.id)
+    setBillerName(bill.name ?? '')
+    setBillerDueDay(bill.dueDay ?? '')
+    setIsBillerModalOpen(true)
   }
 
-  // On mount, double-check for expiry in case time passed while app was closed.
-  useEffect(() => {
-    setSavingsBills((current) => {
-      const now = Date.now()
-      return current.map((b) => {
-        if (b.prepaidExpiry) {
-          const expiry = new Date(b.prepaidExpiry).getTime()
-          if (expiry <= now) {
-            return {
-              ...b,
-              prepaid: false,
+  const closeBillerModal = () => {
+    setIsBillerModalOpen(false)
+    setEditingBillerId(null)
+    setBillerName('')
+    setBillerDueDay('')
+  }
+
+  const saveBiller = () => {
+    const name = billerName.trim()
+    const dueDay = billerDueDay.trim()
+
+    if (!name || !dueDay) {
+      return
+    }
+
+    const nextBillers =
+      billerEditorMode === 'edit'
+        ? billers.map((bill) =>
+            bill.id === editingBillerId
+              ? {
+                  ...bill,
+                  name,
+                  dueDay,
+                }
+              : bill,
+          )
+        : [
+            ...billers,
+            {
+              id: `${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+              name,
+              dueDay,
               paid: false,
               paidDate: '',
-              prepaidExpiry: undefined,
-              prepaidMonths: 0,
-              prepaidUntil: '',
-            }
-          }
-        }
-        return b
-      })
+            },
+          ]
+
+    setBillers(nextBillers)
+    persistAppState({
+      theme,
+      recurringBills,
+      billers: nextBillers,
+      paymentHistory,
+      billingCycleMonthKey,
     })
-  }, [])
-
-  const openPrepayModal = (months) => {
-    const monthsToPreview = months ?? mp1PrepayMonths
-    setPrepayPreview({ months: monthsToPreview, total: monthsToPreview * 200 })
-    setShowPrepayModal(true)
+    closeBillerModal()
   }
 
-  const confirmPrepay = () => {
-    prepayMP1(prepayPreview.months)
-    setShowPrepayModal(false)
+  const deleteBiller = (id) => {
+    const nextBillers = billers.filter((bill) => bill.id !== id)
+    setBillers(nextBillers)
+    persistAppState({
+      theme,
+      recurringBills,
+      billers: nextBillers,
+      paymentHistory,
+      billingCycleMonthKey,
+    })
   }
 
-  const cancelPrepay = () => {
-    setShowPrepayModal(false)
+  const handleBillerModalSubmit = (event) => {
+    event.preventDefault()
+    saveBiller()
   }
 
-  const setMP1Monthly = () => {
-    setSavingsBills((currentBills) =>
-      currentBills.map((bill) =>
-        bill.id === 'pagibig-mp1'
-          ? { ...bill, paid: false, paidDate: '', prepaid: false, amount: '200' }
-          : bill,
-      ),
-    )
-
-    clearBillReceipt('savings', 'pagibig-mp1')
-  }
-
-  const dashboardBills = recurringBills.length + savingsBills.length
+  const dashboardBills = recurringBills.length + billers.length
   const historyEntries = [...paymentHistory].sort((a, b) => {
     const first = new Date(a.timestamp ?? `${a.date} 00:00:00`).getTime()
     const second = new Date(b.timestamp ?? `${b.date} 00:00:00`).getTime()
@@ -664,7 +647,7 @@ function App() {
     })
 
     const monthlyBills = monthEntries.reduce((accumulator, entry) => {
-      if (entry.amount && entry.amount !== 'N/A') {
+      if (entry.type !== 'Recurring') {
         return accumulator
       }
 
@@ -675,8 +658,8 @@ function App() {
       return accumulator
     }, [])
 
-    const pagibigContributions = monthEntries.reduce((accumulator, entry) => {
-      if (!entry.amount || entry.amount === 'N/A') {
+    const billerEntries = monthEntries.reduce((accumulator, entry) => {
+      if (entry.type !== 'Biller') {
         return accumulator
       }
 
@@ -690,7 +673,7 @@ function App() {
     return {
       monthLabel,
       monthlyBills,
-      pagibigContributions,
+      billerEntries,
     }
   })
 
@@ -698,36 +681,29 @@ function App() {
     <>
       <div className="app-shell">
         <header className="topbar">
-          <div className="brand" aria-label="Bills">
-            <div className="brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3.5" y="4" width="17" height="16" rx="4" />
-                <path d="M7 8h9M7 11h7M7 14h5" />
-                <circle cx="16.5" cy="13" r="2.25" />
-                <path d="M16.5 11.8v2.4M15.45 12.55h2.1" />
-              </svg>
+          <div className="topbar-left">
+            <div className="brand" aria-label="Bills">
+              <div className="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3.5" y="4" width="17" height="16" rx="4" />
+                  <path d="M7 8h9M7 11h7M7 14h5" />
+                  <circle cx="16.5" cy="13" r="2.25" />
+                  <path d="M16.5 11.8v2.4M15.45 12.55h2.1" />
+                </svg>
+              </div>
             </div>
-          </div>
 
-          <div className="toolbar">
             <button
               type="button"
-              className={`nav-pill ${view === 'dashboard' ? 'is-active' : ''}`}
-              onClick={() => setView('dashboard')}
+              className={`menu-toggle ${mobileMenuOpen ? 'is-open' : ''}`}
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen((current) => !current)}
             >
-              Dashboard
+              <span />
+              <span />
+              <span />
             </button>
-            <button
-              type="button"
-              className={`nav-pill ${view === 'history' ? 'is-active' : ''}`}
-              onClick={() => setView('history')}
-            >
-              History
-            </button>
-
-            <span className="date-pill" aria-label={`Current date ${currentDateLabel}`}>
-              {currentDateLabel}
-            </span>
 
             <button
               type="button"
@@ -745,6 +721,28 @@ function App() {
                 </svg>
               )}
             </button>
+          </div>
+
+          <div className="toolbar">
+            <button
+              type="button"
+              className={`nav-pill ${view === 'dashboard' ? 'is-active' : ''}`}
+              onClick={() => switchView('dashboard')}
+            >
+              Dashboard
+            </button>
+            <button
+              type="button"
+              className={`nav-pill ${view === 'history' ? 'is-active' : ''}`}
+              onClick={() => switchView('history')}
+            >
+              History
+            </button>
+
+            <span className="date-pill" aria-label={`Current date ${currentDateLabel}`}>
+              {currentDateLabel}
+            </span>
+
             {/* Debug DB buttons removed for production; keep store APIs available for tests */}
             {import.meta.env.DEV ? (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 12 }}>
@@ -797,6 +795,25 @@ function App() {
             ) : null}
           </div>
         </header>
+
+        {mobileMenuOpen ? (
+          <nav className="mobile-nav" aria-label="Mobile navigation">
+            <button
+              type="button"
+              className={`nav-pill ${view === 'dashboard' ? 'is-active' : ''}`}
+              onClick={() => switchView('dashboard')}
+            >
+              Dashboard
+            </button>
+            <button
+              type="button"
+              className={`nav-pill ${view === 'history' ? 'is-active' : ''}`}
+              onClick={() => switchView('history')}
+            >
+              History
+            </button>
+          </nav>
+        ) : null}
 
         {view === 'dashboard' ? (
           <main className="content">
@@ -867,35 +884,43 @@ function App() {
               })}
             </section>
 
-            <section className="list-card" aria-label="Savings contributions">
+            <section className="list-card" aria-label="Billers">
               <div className="section-head">
-                <h2>Pag-Ibig contributions</h2>
+                <h2>Billers</h2>
               </div>
 
-              {savingsBills.map((bill) => {
+              <button type="button" className="nav-pill biller-add-button" onClick={openAddBillerModal}>
+                Add biller
+              </button>
+
+              {billers.map((bill) => {
                 const isPaid = Boolean(bill.paid || bill.receiptDataUrl)
 
                 return (
                   <div className="bill-row" key={bill.id}>
                     <div className="bill-meta">
                       <strong>{bill.name}</strong>
-                            <div className="bill-amount-row">
-                              <label className="bill-amount-label">
-                          Amount:
-                        </label>
-                        <input
-                          aria-label={`${bill.name} amount`}
-                                className="bill-amount-input"
-                          value={bill.amount}
-                          onChange={(e) => updateSavingsAmount(bill.id, e.target.value)}
-                        />
-                      </div>
+                      <span>Due every {bill.dueDay}</span>
                       <span className={`due-badge ${isPaid ? 'is-paid' : 'blue'}`}>
                         {isPaid ? 'Paid' : 'Monthly'}
                       </span>
                     </div>
 
                     <div className="bill-actions">
+                      <button
+                        type="button"
+                        className="status-toggle"
+                        onClick={() => openEditBillerModal(bill)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="undo-toggle"
+                        onClick={() => deleteBiller(bill.id)}
+                      >
+                        Delete
+                      </button>
                       {bill.receiptDataUrl ? (
                         <>
                           <button
@@ -915,7 +940,7 @@ function App() {
                           <button
                             type="button"
                             className="undo-toggle"
-                            onClick={() => clearBillReceipt('savings', bill.id)}
+                            onClick={() => clearBillReceipt('billers', bill.id)}
                           >
                             Undo
                           </button>
@@ -925,14 +950,14 @@ function App() {
                           <button
                             type="button"
                             className="nav-pill"
-                            onClick={() => openReceiptPicker('savings', bill.id, 'camera')}
+                            onClick={() => openReceiptPicker('billers', bill.id, 'camera')}
                           >
                             Camera
                           </button>
                           <button
                             type="button"
                             className="status-toggle"
-                            onClick={() => openReceiptPicker('savings', bill.id, 'gallery')}
+                            onClick={() => openReceiptPicker('billers', bill.id, 'gallery')}
                           >
                             Gallery
                           </button>
@@ -972,20 +997,20 @@ function App() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={historyTab === 'pagibig'}
-                  className={`history-tab ${historyTab === 'pagibig' ? 'is-active' : ''}`}
-                  onClick={() => setHistoryTab('pagibig')}
+                  aria-selected={historyTab === 'billers'}
+                  className={`history-tab ${historyTab === 'billers' ? 'is-active' : ''}`}
+                  onClick={() => setHistoryTab('billers')}
                 >
-                  Pag-Ibig
+                  Billers
                 </button>
               </div>
 
               {historyTab === 'monthly' ? (
                 <div className="history-table">
-                  <div className="history-table-head history-table-head-single">
-                    <div>Month</div>
-                    <div>Monthly bills</div>
-                  </div>
+                    <div className="history-table-head history-table-head-single">
+                      <div>Month</div>
+                      <div>Monthly bills</div>
+                    </div>
 
                   {historyByMonth.map((month) => (
                     <div className="history-table-row history-table-row-single" key={month.monthLabel}>
@@ -1020,16 +1045,16 @@ function App() {
                 <div className="history-table">
                   <div className="history-table-head history-table-head-single">
                     <div>Month</div>
-                    <div>Pag-Ibig contributions</div>
+                    <div>Billers</div>
                   </div>
 
                   {historyByMonth.map((month) => (
                     <div className="history-table-row history-table-row-single" key={month.monthLabel}>
                       <div className="history-month-label">{month.monthLabel}</div>
 
-                      <div className="history-cell history-grid history-grid-pagibig">
-                        {month.pagibigContributions.length ? (
-                          month.pagibigContributions.map((entry) => (
+                      <div className="history-cell history-grid history-grid-billers">
+                        {month.billerEntries.length ? (
+                          month.billerEntries.map((entry) => (
                             <button
                               type="button"
                               key={entry.id}
@@ -1096,24 +1121,40 @@ function App() {
         </div>
       ) : null}
 
-      {showPrepayModal ? (
+      {isBillerModalOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal">
-            <h3>Confirm prepay</h3>
-            <p>
-              Prepay <strong>₱{prepayPreview.total}</strong> to cover{' '}
-              <strong>{prepayPreview.months} month(s)</strong> of MP1? This will mark
-              MP1 as paid and record today's date.
-            </p>
+          <form className="modal" onSubmit={handleBillerModalSubmit}>
+            <h3>{billerEditorMode === 'edit' ? 'Edit biller' : 'Add biller'}</h3>
+            <div className="biller-modal-fields">
+              <label className="modal-field">
+                <span>Name</span>
+                <input
+                  type="text"
+                  value={billerName}
+                  onChange={(e) => setBillerName(e.target.value)}
+                  placeholder="e.g. Internet"
+                  autoFocus
+                />
+              </label>
+              <label className="modal-field">
+                <span>Due date</span>
+                <input
+                  type="text"
+                  value={billerDueDay}
+                  onChange={(e) => setBillerDueDay(e.target.value)}
+                  placeholder="e.g. 15th"
+                />
+              </label>
+            </div>
             <div className="modal-actions">
-              <button className="status-toggle" onClick={confirmPrepay}>
-                Confirm
-              </button>
-              <button className="status-toggle" onClick={cancelPrepay}>
+              <button type="button" className="status-toggle" onClick={closeBillerModal}>
                 Cancel
               </button>
+              <button type="submit" className="nav-pill">
+                {billerEditorMode === 'edit' ? 'Save changes' : 'Add biller'}
+              </button>
             </div>
-          </div>
+          </form>
         </div>
       ) : null}
     </>
@@ -1121,3 +1162,4 @@ function App() {
 }
 
 export default App
+
