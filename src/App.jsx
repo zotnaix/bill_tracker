@@ -68,6 +68,28 @@ const parseDueDay = (dueDay) => {
   return Number.isNaN(numeric) ? 1 : numeric
 }
 
+const normalizeDueDayInput = (value) => {
+  const digitsOnly = String(value ?? '').replace(/\D/g, '').slice(0, 2)
+
+  if (!digitsOnly) {
+    return ''
+  }
+
+  const numeric = Math.min(31, Math.max(1, Number(digitsOnly)))
+  return String(numeric)
+}
+
+const formatDueDayLabel = (dueDay) => {
+  const numeric = normalizeDueDayInput(dueDay)
+  return numeric ? `${numeric}th` : ''
+}
+
+const normalizeBillerNameInput = (value) => {
+  const cleaned = String(value ?? '').replace(/\s+/g, ' ').trimStart()
+
+  return cleaned.replace(/(^|\s)(\S)/g, (match, leading, character) => `${leading}${character.toUpperCase()}`)
+}
+
 const getDueInfo = (dueDay) => {
   const today = new Date()
   const currentYear = today.getFullYear()
@@ -482,7 +504,7 @@ function App() {
         type: target.section === 'recurring' ? 'Recurring' : 'Biller',
         amount: 'N/A',
         months: '1 month',
-        note: target.section === 'recurring' ? `Due every ${bill.dueDay}` : `Due every ${bill.dueDay}`,
+        note: `Due every ${formatDueDayLabel(bill.dueDay)}`,
         receiptDataUrl,
         receiptName: file.name,
       })
@@ -565,7 +587,7 @@ function App() {
     setBillerEditorMode('edit')
     setEditingBillerId(bill.id)
     setBillerName(bill.name ?? '')
-    setBillerDueDay(bill.dueDay ?? '')
+    setBillerDueDay(normalizeDueDayInput(bill.dueDay ?? ''))
     setIsBillerModalOpen(true)
   }
 
@@ -577,8 +599,9 @@ function App() {
   }
 
   const saveBiller = () => {
-    const name = billerName.trim()
-    const dueDay = billerDueDay.trim()
+    const name = normalizeBillerNameInput(billerName)
+    const dueDayNumber = normalizeDueDayInput(billerDueDay)
+    const dueDay = dueDayNumber ? `${dueDayNumber}th` : ''
 
     if (!name || !dueDay) {
       return
@@ -829,7 +852,7 @@ function App() {
                   <div className="bill-row" key={bill.id}>
                     <div className="bill-meta">
                       <strong>{bill.name}</strong>
-                      <span>Due every {bill.dueDay}</span>
+                      <span>Due every {formatDueDayLabel(bill.dueDay)}</span>
                       <span className={`due-badge ${isPaid ? 'is-paid' : getDueInfo(bill.dueDay).tone}`}>
                         {isPaid ? 'Paid' : getDueInfo(bill.dueDay).label}
                       </span>
@@ -900,7 +923,7 @@ function App() {
                   <div className="bill-row" key={bill.id}>
                     <div className="bill-meta">
                       <strong>{bill.name}</strong>
-                      <span>Due every {bill.dueDay}</span>
+                      <span>Due every {formatDueDayLabel(bill.dueDay)}</span>
                       <span className={`due-badge ${isPaid ? 'is-paid' : 'blue'}`}>
                         {isPaid ? 'Paid' : 'Monthly'}
                       </span>
@@ -909,14 +932,14 @@ function App() {
                     <div className="bill-actions">
                       <button
                         type="button"
-                        className="status-toggle"
+                        className="status-toggle biller-action-button biller-edit-button"
                         onClick={() => openEditBillerModal(bill)}
                       >
                         Edit
                       </button>
                       <button
                         type="button"
-                        className="undo-toggle"
+                        className="undo-toggle biller-action-button biller-delete-button"
                         onClick={() => deleteBiller(bill.id)}
                       >
                         Delete
@@ -1131,19 +1154,27 @@ function App() {
                 <input
                   type="text"
                   value={billerName}
-                  onChange={(e) => setBillerName(e.target.value)}
+                  onChange={(e) => setBillerName(normalizeBillerNameInput(e.target.value))}
                   placeholder="e.g. Internet"
                   autoFocus
                 />
               </label>
               <label className="modal-field">
                 <span>Due date</span>
-                <input
-                  type="text"
-                  value={billerDueDay}
-                  onChange={(e) => setBillerDueDay(e.target.value)}
-                  placeholder="e.g. 15th"
-                />
+                <div className="due-day-input-row">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={2}
+                    value={billerDueDay}
+                    onChange={(e) => setBillerDueDay(normalizeDueDayInput(e.target.value))}
+                    placeholder="e.g. 15"
+                  />
+                  <span className="due-day-suffix" aria-hidden="true">
+                    th
+                  </span>
+                </div>
               </label>
             </div>
             <div className="modal-actions">

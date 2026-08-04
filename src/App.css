@@ -271,6 +271,16 @@
   margin-left: auto;
 }
 
+.bill-actions button {
+  width: 100px;
+  height: 44px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
 .bill-amount-row {
   display: flex;
   align-items: center;
@@ -448,6 +458,28 @@
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-h);
+}
+
+.due-day-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.due-day-input-row input {
+  flex: 1;
+}
+
+.due-day-suffix {
+  min-width: 42px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .history-item {
@@ -633,6 +665,29 @@
 .status-toggle.is-paid {
   background: var(--accent);
   color: var(--bg);
+  border-color: transparent;
+}
+
+.biller-action-button {
+  color: #fff;
+  border: 0;
+}
+
+.biller-edit-button {
+  background: #2563eb;
+}
+
+.biller-edit-button:hover {
+  background: #1d4ed8;
+  border-color: transparent;
+}
+
+.biller-delete-button {
+  background: #dc2626;
+}
+
+.biller-delete-button:hover {
+  background: #b91c1c;
   border-color: transparent;
 }
 
